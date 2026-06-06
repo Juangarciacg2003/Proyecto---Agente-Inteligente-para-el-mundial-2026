@@ -236,13 +236,15 @@ with col_texto:
       <span class="badge badge-verde">⚡ IA en vivo</span>
     </div>
     """, unsafe_allow_html=True)
-
+    
+tab1, tab2 = st.tabs(["💬 Chat AlonBot", "📊 Predictor Mundial"])
 # =====================================================================
 # VALIDACIÓN DE API KEY (después del header para que se vea bonito)
 # =====================================================================
-if not api_key:
-    st.error("❌ ¡Falta la API Key! Revisa que el archivo .env tenga la variable OPENROUTE_API_KEY.")
-    st.stop()
+with tab1:
+    if not api_key:
+        st.error("❌ ¡Falta la API Key! Revisa que el archivo .env tenga la variable OPENROUTE_API_KEY.")
+        st.stop()
 
 os.environ["OPENAI_API_KEY"] = api_key
 
@@ -393,3 +395,150 @@ st.markdown("""
   AlonBot v2.0 · GPT-4o Mini + LangChain + RAG · Hecho con 🇨🇴 pasión tricolor
 </p>
 """, unsafe_allow_html=True)
+with tab2:
+    import pickle
+    import numpy as np
+
+    st.markdown("""
+    <div style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,209,0,0.2);
+                border-radius:16px; padding:1.4rem; margin-bottom:1.2rem;">
+        <h3 style="color:#FFD100; font-family:'Archivo Black',sans-serif; margin:0 0 4px;">
+            📊 Predictor Colombia · Grupo K
+        </h3>
+        <p style="color:rgba(255,255,255,0.5); font-size:13px; margin:0;">
+            Basado en estadísticas históricas reales de Colombia
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Cargar modelos ──────────────────────────────────────────────
+    ruta_btts  = Path(__file__).parent / "Modelo" / "model_btts.pkl"
+    ruta_over  = Path(__file__).parent / "Modelo" / "model_over_2_5.pkl"
+
+    with open(ruta_btts, "rb") as f:
+        modelo_btts = pickle.load(f)
+    with open(ruta_over, "rb") as f:
+        modelo_over = pickle.load(f)
+
+    # ── Rival ───────────────────────────────────────────────────────
+    rival = st.selectbox(
+        "⚽ Selecciona el rival de Colombia",
+        ["Uzbekistán", "RD Congo"]
+    )
+
+    st.markdown("---")
+    st.markdown("**📋 Ingresa las estadísticas de Colombia (últimos 5 partidos):**")
+
+    # ── Inputs del usuario ──────────────────────────────────────────
+    col1, col2 = st.columns(2)
+
+    with col1:
+        is_home          = st.selectbox("🏟️ Colombia juega de", ["Local", "Visitante"])
+        goals_scored_l5  = st.number_input("⚽ Goles anotados (últ. 5)", min_value=0.0, max_value=20.0, value=7.0, step=0.5)
+        btts_last5       = st.number_input("🔄 Partidos BTTS (últ. 5)", min_value=0.0, max_value=5.0, value=2.0, step=0.5)
+
+    with col2:
+        points_last5     = st.number_input("🏆 Puntos (últ. 5 partidos)", min_value=0.0, max_value=15.0, value=9.0, step=0.5)
+        goals_conceded_l5 = st.number_input("🥅 Goles recibidos (últ. 5)", min_value=0.0, max_value=20.0, value=3.0, step=0.5)
+        over25_last5     = st.number_input("📈 Partidos Over 2.5 (últ. 5)", min_value=0.0, max_value=5.0, value=3.0, step=0.5)
+
+    # ── Botón predecir ──────────────────────────────────────────────
+    if st.button("🔮 PREDECIR", use_container_width=True):
+
+        is_home_val = 1 if is_home == "Local" else 0
+
+        entrada = np.array([[
+            is_home_val,
+            points_last5,
+            goals_scored_l5,
+            goals_conceded_l5,
+            btts_last5,
+            over25_last5
+        ]])
+
+        # Predicciones
+        pred_btts  = modelo_btts.predict(entrada)[0]
+        prob_btts  = modelo_btts.predict_proba(entrada)[0]
+
+        pred_over  = modelo_over.predict(entrada)[0]
+        prob_over  = modelo_over.predict_proba(entrada)[0]
+
+        # ── Resultado BTTS ──────────────────────────────────────────
+        color_btts  = "#FFD100" if pred_btts == 1 else "#E40428"
+        texto_btts  = "✅ SÍ anotan ambos" if pred_btts == 1 else "❌ NO anotan ambos"
+        prob_si_btts = prob_btts[1] * 100
+        prob_no_btts = prob_btts[0] * 100
+
+        # ── Resultado Over 2.5 ──────────────────────────────────────
+        color_over  = "#FFD100" if pred_over == 1 else "#E40428"
+        texto_over  = "✅ SÍ hay Over 2.5" if pred_over == 1 else "❌ NO hay Over 2.5"
+        prob_si_over = prob_over[1] * 100
+        prob_no_over = prob_over[0] * 100
+
+        st.markdown(f"""
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:1rem;">
+
+          <div style="background:rgba(0,0,0,0.35); border:2px solid {color_btts};
+                      border-radius:14px; padding:1.2rem; text-align:center;">
+            <p style="color:rgba(255,255,255,0.5); font-size:11px; margin:0 0 6px;">
+              AMBOS ANOTAN (BTTS)
+            </p>
+            <p style="color:{color_btts}; font-family:'Archivo Black',sans-serif;
+                      font-size:1.1rem; margin:0 0 12px;">{texto_btts}</p>
+            <div style="margin:4px 0;">
+              <div style="display:flex; justify-content:space-between;
+                          color:#4ade80; font-size:12px; margin-bottom:2px;">
+                <span>✅ Sí</span><span><b>{prob_si_btts:.1f}%</b></span>
+              </div>
+              <div style="background:rgba(255,255,255,0.1); border-radius:8px; height:7px;">
+                <div style="background:#4ade80; width:{prob_si_btts:.1f}%;
+                            height:7px; border-radius:8px;"></div>
+              </div>
+            </div>
+            <div style="margin:4px 0;">
+              <div style="display:flex; justify-content:space-between;
+                          color:#f87171; font-size:12px; margin-bottom:2px;">
+                <span>❌ No</span><span><b>{prob_no_btts:.1f}%</b></span>
+              </div>
+              <div style="background:rgba(255,255,255,0.1); border-radius:8px; height:7px;">
+                <div style="background:#f87171; width:{prob_no_btts:.1f}%;
+                            height:7px; border-radius:8px;"></div>
+              </div>
+            </div>
+          </div>
+
+          <div style="background:rgba(0,0,0,0.35); border:2px solid {color_over};
+                      border-radius:14px; padding:1.2rem; text-align:center;">
+            <p style="color:rgba(255,255,255,0.5); font-size:11px; margin:0 0 6px;">
+              OVER 2.5 GOLES
+            </p>
+            <p style="color:{color_over}; font-family:'Archivo Black',sans-serif;
+                      font-size:1.1rem; margin:0 0 12px;">{texto_over}</p>
+            <div style="margin:4px 0;">
+              <div style="display:flex; justify-content:space-between;
+                          color:#4ade80; font-size:12px; margin-bottom:2px;">
+                <span>✅ Sí</span><span><b>{prob_si_over:.1f}%</b></span>
+              </div>
+              <div style="background:rgba(255,255,255,0.1); border-radius:8px; height:7px;">
+                <div style="background:#4ade80; width:{prob_si_over:.1f}%;
+                            height:7px; border-radius:8px;"></div>
+              </div>
+            </div>
+            <div style="margin:4px 0;">
+              <div style="display:flex; justify-content:space-between;
+                          color:#f87171; font-size:12px; margin-bottom:2px;">
+                <span>❌ No</span><span><b>{prob_no_over:.1f}%</b></span>
+              </div>
+              <div style="background:rgba(255,255,255,0.1); border-radius:8px; height:7px;">
+                <div style="background:#f87171; width:{prob_no_over:.1f}%;
+                            height:7px; border-radius:8px;"></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <p style="color:rgba(255,255,255,0.3); font-size:11px; text-align:center; margin-top:1rem;">
+          ⚠️ Predicción basada en datos históricos · No es consejo de apuesta
+        </p>
+        """, unsafe_allow_html=True)
