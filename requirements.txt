@@ -7,3 +7,6 @@ python-dotenv
 duckduckgo-search
 ddgs
 wikipedia
+scikit-learn
+pandas
+numpy
